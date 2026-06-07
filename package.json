@@ -88,6 +88,8 @@
       ]
     },
     "linux": {
+      "maintainer": "DreamWriter Contributors <noreply@dreamwriter.local>",
+      "category": "Utility",
       "target": [
         "AppImage",
         "deb"
