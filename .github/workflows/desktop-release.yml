@@ -1,0 +1,87 @@
+name: Desktop Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "codex/desktop-release-matrix"
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Package ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-arm64
+            os: macos-15
+          - target: darwin-x64
+            os: macos-15-intel
+          - target: win32-x64
+            os: windows-2025
+          - target: win32-arm64
+            os: windows-11-arm
+          - target: linux-x64
+            os: ubuntu-24.04
+          - target: linux-arm64
+            os: ubuntu-24.04-arm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.16.0"
+          cache: pnpm
+
+      - name: Enable pnpm
+        run: corepack enable
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build web and backend
+        run: |
+          pnpm build
+          pnpm backend:build
+
+      - name: Install target Java runtime
+        run: node scripts/build-java-runtime.cjs --target=${{ matrix.target }} --install-vendor --force-jlink
+
+      - name: Package desktop app
+        run: node scripts/package-electron-all.cjs --targets=${{ matrix.target }} --skip-build
+
+      - name: Verify release manifest
+        run: node scripts/verify-release-manifest.cjs --targets=${{ matrix.target }} --require-release-files --require-all-requested
+
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dream-writer-${{ matrix.target }}
+          if-no-files-found: error
+          path: |
+            release/package-manifest.json
+            release/*.zip
+            release/*.zip.blockmap
+            release/*.dmg
+            release/*.dmg.blockmap
+            release/*.exe
+            release/*.exe.blockmap
+            release/*.AppImage
+            release/*.deb
+            release/latest*.yml
